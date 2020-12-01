@@ -1,0 +1,22 @@
+{
+    "fov": [60],
+    "resolution": [1000, 1000],
+    "look_at": [0, 0, 0],
+    "up": [0, -1, 0],
+    "positions": [
+        [259.80762, 0.0, -150.00002],
+        [-259.80765, 0.0, -149.99997]
+    ],
+    "lights": [
+        {
+            "type": "directional",
+            "direction": [0, -1, -1],
+            "intensity": [1, 1, 1]
+        },
+        {
+            "type": "directional",
+            "direction": [0, -1, 1],
+            "intensity": [1, 1, 1]
+        }
+    ]
+}
