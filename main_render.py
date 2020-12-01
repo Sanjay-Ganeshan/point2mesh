@@ -28,7 +28,7 @@ input_xyz = torch.Tensor(input_xyz).type(options.dtype()).to(device)[None, :, :]
 input_normals = torch.Tensor(input_normals).type(options.dtype()).to(device)[None, :, :]
 
 # Split the mesh into parts
-part_mesh = PartMesh(mesh, num_parts=options.get_num_parts(len(mesh.faces)), bfs_depth=opts.overlap)
+part_mesh = PartMesh(mesh, num_parts=1, bfs_depth=opts.overlap)
 print(f'number of parts {part_mesh.n_submeshes}')
 
 # Initialize displacement network
@@ -138,7 +138,7 @@ for i in range(opts.iterations):
                                            num_faces=min(num_faces, opts.max_faces),
                                            res=opts.manifold_res, simplify=True)
             # Split it into parts again
-            part_mesh = PartMesh(mesh, num_parts=options.get_num_parts(len(mesh.faces)), bfs_depth=opts.overlap)
+            part_mesh = PartMesh(mesh, num_parts=1, bfs_depth=opts.overlap)
             print(f'upsampled to {len(mesh.faces)} faces; number of parts {part_mesh.n_submeshes}')
             
             # Now we're using a totally different mesh, throw away the old optimizer / weights

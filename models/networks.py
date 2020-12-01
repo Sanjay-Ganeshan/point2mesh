@@ -99,6 +99,7 @@ class PriorNet(nn.Module):
         self.init_verts = init_verts
 
     def forward(self, x, meshes):
+        # x is the random initialization that gets updated
         meshes_new = [i.deep_copy() for i in meshes]
         x, _ = self.encoder_decoder(x, meshes_new)
         x = x.squeeze(-1)
@@ -427,6 +428,16 @@ def init_net(mesh, part_mesh, device, opts):
                   init_verts=init_verts, transfer_data=opts.transfer_data,
                   leaky=opts.leaky_relu, init_weights_size=opts.init_weights).to(device)
 
+    optimizer = optim.Adam(net.parameters(), lr=opts.lr)
+    scheduler = get_scheduler(opts.iterations, optimizer)
+    rand_verts = populate_e([mesh])
+    return net, optimizer, rand_verts, scheduler
+
+def init_whole_net(mesh, device, opts):
+    init_verts = mesh.vs.clone().detach()
+    temp = torch.linspace(len(opts.convs), 1, len(opts.convs)).long().tolist()
+    net = PriorNet(temp[0], in_ch=6, convs=opts.convs, pool=temp[1:], res_blocks=opts.res_blocks,
+                 init_verts=init_verts, transfer_data=opts.transfer_data, leaky=opts.leaky_relu, init_weights_size=opts.init_weights).to(device)
     optimizer = optim.Adam(net.parameters(), lr=opts.lr)
     scheduler = get_scheduler(opts.iterations, optimizer)
     rand_verts = populate_e([mesh])

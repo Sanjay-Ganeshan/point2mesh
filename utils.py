@@ -9,6 +9,9 @@ def manifold_upsample(mesh, save_path, Mesh, num_faces=2000, res=3000, simplify=
     # export before upsample
     fname = os.path.join(save_path, 'recon_{}.obj'.format(len(mesh.faces)))
     mesh.export(fname)
+    device = mesh.device
+
+    del mesh
 
     temp_file = os.path.join(save_path, random_file_name('obj'))
     opts = ' ' + str(res) if res is not None else ''
@@ -24,7 +27,7 @@ def manifold_upsample(mesh, save_path, Mesh, num_faces=2000, res=3000, simplify=
                                                              temp_file, num_faces)
         os.system(cmd)
 
-    m_out = Mesh(temp_file, hold_history=True, device=mesh.device)
+    m_out = Mesh(temp_file, hold_history=True, device=device)
     fname = os.path.join(save_path, 'recon_{}_after.obj'.format(len(m_out.faces)))
     m_out.export(fname)
     [os.remove(_) for _ in list(glob.glob(os.path.splitext(temp_file)[0] + '*'))]
