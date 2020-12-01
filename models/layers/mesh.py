@@ -9,7 +9,6 @@ from pytorch3d.ops.knn import knn_gather, knn_points
 
 
 class Mesh:
-
     def __init__(self, file, hold_history=False, vs=None, faces=None, device='cpu', gfmm=True):
         if file is None:
             return

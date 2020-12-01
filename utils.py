@@ -4,6 +4,7 @@ import os
 import uuid
 from options import MANIFOLD_DIR
 import glob
+from pathlib import Path
 
 def manifold_upsample(mesh, save_path, Mesh, num_faces=2000, res=3000, simplify=True):
     # export before upsample
@@ -30,6 +31,7 @@ def manifold_upsample(mesh, save_path, Mesh, num_faces=2000, res=3000, simplify=
     m_out = Mesh(temp_file, hold_history=True, device=device)
     fname = os.path.join(save_path, 'recon_{}_after.obj'.format(len(m_out.faces)))
     m_out.export(fname)
+    m_out.filename = Path(fname)
     [os.remove(_) for _ in list(glob.glob(os.path.splitext(temp_file)[0] + '*'))]
     return m_out
 

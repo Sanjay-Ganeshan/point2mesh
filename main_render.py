@@ -2,8 +2,9 @@ import torch
 from models.layers.mesh import Mesh, PartMesh
 from models.networks import init_net, sample_surface, local_nonuniform_penalty
 import utils
+import render_utils
 import numpy as np
-from models.losses import chamfer_distance, BeamGapLoss
+from models.losses import chamfer_distance
 from options import Options
 import time
 import os
@@ -18,6 +19,7 @@ print('device: {}'.format(device))
 
 # initial mesh
 mesh = Mesh(opts.initial_mesh, device=device, hold_history=True)
+render_settings = render_utils.init_renderer(mesh)
 
 # input point cloud
 input_xyz, input_normals = utils.read_pts(opts.input_pc)
@@ -33,13 +35,6 @@ print(f'number of parts {part_mesh.n_submeshes}')
 
 # Initialize displacement network
 net, optimizer, rand_verts, scheduler = init_net(mesh, part_mesh, device, opts)
-
-# Create beamgap loss (how far is this from the surface?)
-beamgap_loss = BeamGapLoss(device)
-
-if opts.beamgap_iterations > 0:
-    print('beamgap on')
-    beamgap_loss.update_pm(part_mesh, torch.cat([input_xyz, input_normals], dim=-1))
 
 # For each iteration
 for i in range(opts.iterations):
@@ -63,6 +58,8 @@ for i in range(opts.iterations):
         # However, the mesh remembers the old ones as well?
         part_mesh.update_verts(est_verts[0], part_i)
 
+        rendered_images = render_utils.render_mesh(est_verts[0], render_settings)
+
         # Repetitive? Choose sampling density
         num_samples = options.get_num_samples(i % opts.upsamp)
 
@@ -82,10 +79,7 @@ for i in range(opts.iterations):
         # It REPLACES chamfer loss.
         # Chamfer is testing both the normals & the positions
         # the normals have some weighting.
-        if (i < opts.beamgap_iterations) and (i % opts.beamgap_modulo == 0):
-            loss = beamgap_loss(part_mesh, part_i)
-        else:
-            loss = (xyz_chamfer_loss + (opts.ang_wt * normals_chamfer_loss))
+        loss = (xyz_chamfer_loss + (opts.ang_wt * normals_chamfer_loss))
         
         # Apply a smoothness loss. Normally has weight 0.1.
         # This is calculated as, the norm of for any given edge, the difference in area
@@ -118,6 +112,7 @@ for i in range(opts.iterations):
               f' sample count: {num_samples}; time: {end_time - start_time:.2f}')
     if i % opts.export_interval == 0 and i > 0:
         print('exporting reconstruction... current LR: {}'.format(optimizer.param_groups[0]['lr']))
+        render_utils.show_images(rendered_images)
         with torch.no_grad():
             part_mesh.export(os.path.join(opts.save_path, f'recon_iter_{i}.obj'))
 
@@ -137,6 +132,7 @@ for i in range(opts.iterations):
             mesh = utils.manifold_upsample(mesh, opts.save_path, Mesh,
                                            num_faces=min(num_faces, opts.max_faces),
                                            res=opts.manifold_res, simplify=True)
+            render_settings = render_utils.init_renderer(mesh)
             # Split it into parts again
             part_mesh = PartMesh(mesh, num_parts=1, bfs_depth=opts.overlap)
             print(f'upsampled to {len(mesh.faces)} faces; number of parts {part_mesh.n_submeshes}')
@@ -144,11 +140,6 @@ for i in range(opts.iterations):
             # Now we're using a totally different mesh, throw away the old optimizer / weights
             # and start anew.
             net, optimizer, rand_verts, scheduler = init_net(mesh, part_mesh, device, opts)
-
-            # Update the beamgap loss too
-            if i < opts.beamgap_iterations:
-                print('beamgap updated')
-                beamgap_loss.update_pm(part_mesh, input_xyz)
 
 # Finally, we have a reconstructed mesh, so just output that.
 with torch.no_grad():
