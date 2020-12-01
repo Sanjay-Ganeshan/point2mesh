@@ -5,7 +5,7 @@ import utils
 import render_utils
 import numpy as np
 from models.losses import chamfer_distance
-from options import Options
+from modoptions import Options
 import time
 import os
 
@@ -21,13 +21,20 @@ print('device: {}'.format(device))
 mesh = Mesh(opts.initial_mesh, device=device, hold_history=True)
 render_settings = render_utils.init_renderer(mesh)
 
+target_mesh = Mesh(opts.target_mesh, device=device, hold_history=False)
+gt_render_settings = render_utils.init_renderer(target_mesh)
+gt_images = render_utils.render_mesh(target_mesh.vs, gt_render_settings)
+
+# No more point cloud
 # input point cloud
-input_xyz, input_normals = utils.read_pts(opts.input_pc)
+# input_xyz, input_normals = utils.read_pts(opts.input_pc)
 # normalize point cloud based on initial mesh
-input_xyz /= mesh.scale
-input_xyz += mesh.translations[None, :]
-input_xyz = torch.Tensor(input_xyz).type(options.dtype()).to(device)[None, :, :]
-input_normals = torch.Tensor(input_normals).type(options.dtype()).to(device)[None, :, :]
+# input_xyz /= mesh.scale
+# input_xyz += mesh.translations[None, :]
+# input_xyz = torch.Tensor(input_xyz).type(options.dtype()).to(device)[None, :, :]
+# input_normals = torch.Tensor(input_normals).type(options.dtype()).to(device)[None, :, :]
+
+mseloss = torch.nn.MSELoss()
 
 # Split the mesh into parts
 part_mesh = PartMesh(mesh, num_parts=1, bfs_depth=opts.overlap)
@@ -39,7 +46,7 @@ net, optimizer, rand_verts, scheduler = init_net(mesh, part_mesh, device, opts)
 # For each iteration
 for i in range(opts.iterations):
     # Choose sampling density. Later = more samples (Coarse->Fine)
-    num_samples = options.get_num_samples(i % opts.upsamp)
+    # num_samples = options.get_num_samples(i % opts.upsamp)
     
     # If using a global step, zero-out the gradient after doing all parts & back.
     # Otherwise, step and zero after each part
@@ -59,33 +66,35 @@ for i in range(opts.iterations):
         part_mesh.update_verts(est_verts[0], part_i)
 
         rendered_images = render_utils.render_mesh(est_verts[0], render_settings)
+        img_loss = mseloss(rendered_images, gt_images)
 
         # Repetitive? Choose sampling density
-        num_samples = options.get_num_samples(i % opts.upsamp)
+        # num_samples = options.get_num_samples(i % opts.upsamp)
 
         # Sample the prediction
-        recon_xyz, recon_normals = sample_surface(part_mesh.main_mesh.faces, part_mesh.main_mesh.vs.unsqueeze(0), num_samples)
+        # recon_xyz, recon_normals = sample_surface(part_mesh.main_mesh.faces, part_mesh.main_mesh.vs.unsqueeze(0), num_samples)
 
         # The target is "input_xyz", and "input_normals"
         # Here, we calculate the difference between the sampled points, and their normals, and
         # The target via chamfer loss (find nearest x->y and nearest y->x, sum)
         # calc chamfer loss w/ normals
-        recon_xyz, recon_normals = recon_xyz.type(options.dtype()), recon_normals.type(options.dtype())
-        xyz_chamfer_loss, normals_chamfer_loss = chamfer_distance(recon_xyz, input_xyz, x_normals=recon_normals, y_normals=input_normals,
-                                              unoriented=opts.unoriented)
+        # recon_xyz, recon_normals = recon_xyz.type(options.dtype()), recon_normals.type(options.dtype())
+        # xyz_chamfer_loss, normals_chamfer_loss = chamfer_distance(recon_xyz, input_xyz, x_normals=recon_normals, y_normals=input_normals,
+        #                                       unoriented=opts.unoriented)
 
         # Every once in a while, calculate the beamgap loss too. This is probably expensive.
         # It isn't used in the demo. We only use this at the beginning
         # It REPLACES chamfer loss.
         # Chamfer is testing both the normals & the positions
         # the normals have some weighting.
-        loss = (xyz_chamfer_loss + (opts.ang_wt * normals_chamfer_loss))
+        # loss = (xyz_chamfer_loss + (opts.ang_wt * normals_chamfer_loss))
         
         # Apply a smoothness loss. Normally has weight 0.1.
         # This is calculated as, the norm of for any given edge, the difference in area
         # between it's incident faces.
-        if opts.local_non_uniform > 0:
-            loss += opts.local_non_uniform * local_nonuniform_penalty(part_mesh.main_mesh).float()
+        #if opts.local_non_uniform > 0:
+        #    loss = opts.local_non_uniform * local_nonuniform_penalty(part_mesh.main_mesh).float()
+        loss = img_loss
 
         # Back propogate
         loss.backward()
@@ -108,8 +117,8 @@ for i in range(opts.iterations):
 
     # Save / print
     if i % 1 == 0:
-        print(f'{os.path.basename(opts.input_pc)}; iter: {i} out of: {opts.iterations}; loss: {loss.item():.4f};'
-              f' sample count: {num_samples}; time: {end_time - start_time:.2f}')
+        print(f'{os.path.basename(opts.target_mesh)}; iter: {i} out of: {opts.iterations}; loss: {loss.item():.4f};'
+              f'time: {end_time - start_time:.2f}')
     if i % opts.export_interval == 0 and i > 0:
         print('exporting reconstruction... current LR: {}'.format(optimizer.param_groups[0]['lr']))
         render_utils.show_images(rendered_images)

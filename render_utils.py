@@ -11,17 +11,23 @@ def init_renderer(mesh):
     objects = pyr.load_obj(obj_fp, return_objects=True)
     #camera = pyr.automatic_camera_placement(objects, (256, 256))
     camera = pyr.Camera(
-        position=torch.tensor([1,0,0], dtype=torch.float32),
+        position=torch.tensor([1.2,0,0], dtype=torch.float32),
         look_at=torch.tensor([0,0,0], dtype=torch.float32),
         up=torch.tensor([0,1,0], dtype=torch.float32),
         fov = torch.tensor([60], dtype=torch.float32),
         resolution = (256, 256),
         camera_type=pyr.camera_type.perspective
     )
-    lights = [pyr.DirectionalLight(
-        direction=camera.look_at.clone().detach(),
-        intensity=torch.tensor([1, 1, 1], dtype=torch.float32, device=pyr.get_device())
-    )]
+    lights = [
+        pyr.DirectionalLight(
+            direction=torch.tensor([-1, 0, 0], dtype=torch.float32, device=pyr.get_device()),
+            intensity=torch.tensor([1, 1, 1], dtype=torch.float32, device=pyr.get_device())
+        ),
+        pyr.DirectionalLight(
+            direction=torch.tensor([1, 0, 0], dtype=torch.float32, device=pyr.get_device()),
+            intensity=torch.tensor([1, 1, 1], dtype=torch.float32, device=pyr.get_device())
+        )
+    ]
     return objects, camera, lights
 
 def render_mesh(verts, render_settings):
